@@ -980,18 +980,51 @@ bool vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::IsCameraInside(
   double camPos[4];
   double camPlaneNormal[4];
 
-  cam->GetPosition(camWorldPos);
+  //cam->GetPosition(camWorldPos);
+  //camWorldPos[3] = 1.0;
+
+
+
+  // ===================================== EPX CHANGES
+  double temp[3];
+  vtkSmartPointer<vtkMatrix4x4> epxViewTC = vtkSmartPointer<vtkMatrix4x4>::New();
+  epxViewTC->DeepCopy(cam->GetViewTransformMatrix());
+
+  temp[0] = epxViewTC->GetElement(0, 3); // transform pose
+  temp[1] = epxViewTC->GetElement(1, 3);
+  temp[2] = epxViewTC->GetElement(2, 3);
+
+  epxViewTC->Invert();
+
+  camWorldPos[0] = epxViewTC->GetElement(0, 3); // real pose
+  camWorldPos[1] = epxViewTC->GetElement(1, 3);
+  camWorldPos[2] = epxViewTC->GetElement(2, 3);
   camWorldPos[3] = 1.0;
+  epxViewTC->SetElement(0, 3, 0.0);
+  epxViewTC->SetElement(1, 3, 0.0);
+  epxViewTC->SetElement(2, 3, 0.0);
+
+  epxViewTC->MultiplyPoint(temp, camWorldDirection);
+  camWorldDirection[3] = 1.0;
+
+  camFocalWorldPoint[0] = camWorldPos[0] + camWorldDirection[0];
+  camFocalWorldPoint[1] = camWorldPos[1] + camWorldDirection[1];
+  camFocalWorldPoint[2] = camWorldPos[2] + camWorldDirection[2];
+  camFocalWorldPoint[3] = 1.0;
+
+  // ===================================== EPX CHANGES OVER
+
+
   dataToWorld->MultiplyPoint( camWorldPos, camPos );
 
-  cam->GetFocalPoint(camFocalWorldPoint);
-  camFocalWorldPoint[3] = 1.0;
+  //cam->GetFocalPoint(camFocalWorldPoint);
+  //camFocalWorldPoint[3] = 1.0;
 
   // The range (near/far) must also be transformed
   // into the local coordinate system.
-  camWorldDirection[0] = camFocalWorldPoint[0] - camWorldPos[0];
-  camWorldDirection[1] = camFocalWorldPoint[1] - camWorldPos[1];
-  camWorldDirection[2] = camFocalWorldPoint[2] - camWorldPos[2];
+  //camWorldDirection[0] = camFocalWorldPoint[0] - camWorldPos[0];
+  //camWorldDirection[1] = camFocalWorldPoint[1] - camWorldPos[1];
+  //camWorldDirection[2] = camFocalWorldPoint[2] - camWorldPos[2];
   camWorldDirection[3] = 0.0;
 
   // Compute the normalized near plane normal
@@ -1073,18 +1106,55 @@ void vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::RenderVolumeGeometry(
       double camWorldDirection[4];
       double camPlaneNormal[4];
 
-      cam->GetPosition(camWorldPos);
-      camWorldPos[3] = 1.0;
+	  // ===================================== EPX CHANGES
+	  //cam->GetPosition(camWorldPos);
+   //   camWorldPos[3] = 1.0;
 
-      cam->GetFocalPoint(camFocalWorldPoint);
-      camFocalWorldPoint[3] = 1.0;
+   //   cam->GetFocalPoint(camFocalWorldPoint);
+   //   camFocalWorldPoint[3] = 1.0;
 
-      // The range (near/far) must also be transformed
-      // into the local coordinate system.
-      camWorldDirection[0] = camFocalWorldPoint[0] - camWorldPos[0];
-      camWorldDirection[1] = camFocalWorldPoint[1] - camWorldPos[1];
-      camWorldDirection[2] = camFocalWorldPoint[2] - camWorldPos[2];
-      camWorldDirection[3] = 0.0;
+   //   // The range (near/far) must also be transformed
+   //   // into the local coordinate system.
+   //   camWorldDirection[0] = camFocalWorldPoint[0] - camWorldPos[0];
+   //   camWorldDirection[1] = camFocalWorldPoint[1] - camWorldPos[1];
+   //   camWorldDirection[2] = camFocalWorldPoint[2] - camWorldPos[2];
+   //   camWorldDirection[3] = 0.0;
+	  double camPos[4];
+	  double temp[3];
+	  vtkSmartPointer<vtkMatrix4x4> epxViewTC = vtkSmartPointer<vtkMatrix4x4>::New();
+	  epxViewTC->DeepCopy(cam->GetViewTransformMatrix());
+
+	  temp[0] = epxViewTC->GetElement(0, 3); // transform pose
+	  temp[1] = epxViewTC->GetElement(1, 3);
+	  temp[2] = epxViewTC->GetElement(2, 3);
+
+	  epxViewTC->Invert();
+
+	  camWorldPos[0] = epxViewTC->GetElement(0, 3); // real pose
+	  camWorldPos[1] = epxViewTC->GetElement(1, 3);
+	  camWorldPos[2] = epxViewTC->GetElement(2, 3);
+	  camWorldPos[3] = 1.0;
+
+	  epxViewTC->SetElement(0, 3, 0.0);
+	  epxViewTC->SetElement(1, 3, 0.0);
+	  epxViewTC->SetElement(2, 3, 0.0);
+
+	  epxViewTC->MultiplyPoint(temp, camWorldDirection);
+	  camWorldDirection[3] = 1.0;
+
+	  camFocalWorldPoint[0] = camWorldPos[0] + camWorldDirection[0];
+	  camFocalWorldPoint[1] = camWorldPos[1] + camWorldDirection[1];
+	  camFocalWorldPoint[2] = camWorldPos[2] + camWorldDirection[2];
+	  camFocalWorldPoint[3] = 1.0;
+
+	  dataToWorld->MultiplyPoint(camWorldPos, camPos);
+	  if (camPos[3])
+	  {
+		  camPos[0] /= camPos[3];
+		  camPos[1] /= camPos[3];
+		  camPos[2] /= camPos[3];
+	  }
+	  // ===================================== EPX CHANGES OVER
 
       // Compute the normalized near plane normal
       vtkNew<vtkMatrix4x4> transposeDataToWorld;
@@ -3718,8 +3788,24 @@ void vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::SetCameraShaderParameters(
       "in_projectionDirection", 1, &fvalue3);
   }
 
-  vtkInternal::ToFloat(cam->GetPosition(), fvalue3, 3);
+  //================================ EPX CHANGES
+   //vtkInternal::ToFloat(cam->GetPosition(), fvalue3, 3);
+   //prog->SetUniform3fv("in_cameraPos", 1, &fvalue3);
+
+
+  vtkSmartPointer<vtkMatrix4x4> epxViewTP = vtkSmartPointer<vtkMatrix4x4>::New();
+  epxViewTP->DeepCopy(ren->GetActiveCamera()->GetViewTransformMatrix());
+  epxViewTP->Invert();
+
+  double pos[4];
+  pos[0] = epxViewTP->GetElement(0, 3);
+  pos[1] = epxViewTP->GetElement(1, 3);
+  pos[2] = epxViewTP->GetElement(2, 3);
+  pos[3] = 1.0;
+
+  vtkInternal::ToFloat(pos, fvalue3, 3);
   prog->SetUniform3fv("in_cameraPos", 1, &fvalue3);
+  //================================ EPX CHANGES END
 
   // TODO Take consideration of reduction factor
   float fvalue2[2];
