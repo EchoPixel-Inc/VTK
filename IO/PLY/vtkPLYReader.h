@@ -23,8 +23,8 @@
  * must have the properties "x", "y", and "z". The "face" element must
  * have the property "vertex_indices" defined. Optionally, if the "face"
  * element has the properties "intensity" and/or the triplet "red",
- * "green", "blue", and optionally "alpha"; these are read and added as scalars
- * to the output data.
+ * "green", and "blue"; these are read and added as scalars to the
+ * output data.
  *
  * @sa
  * vtkPLYWriter
@@ -36,13 +36,11 @@
 #include "vtkIOPLYModule.h" // For export macro
 #include "vtkAbstractPolyDataReader.h"
 
-class vtkStringArray;
-
 class VTKIOPLY_EXPORT vtkPLYReader : public vtkAbstractPolyDataReader
 {
 public:
   vtkTypeMacro(vtkPLYReader,vtkAbstractPolyDataReader);
-  void PrintSelf(ostream& os, vtkIndent indent) override;
+  void PrintSelf(ostream& os, vtkIndent indent);
 
   /**
    * Construct object with merging set to true.
@@ -54,18 +52,14 @@ public:
    */
   static int CanReadFile(const char *filename);
 
-  vtkGetObjectMacro(Comments, vtkStringArray);
-
 protected:
   vtkPLYReader();
-  ~vtkPLYReader() override;
+  ~vtkPLYReader();
 
-  vtkStringArray* Comments;
-
-  int RequestData(vtkInformation *, vtkInformationVector **, vtkInformationVector *) override;
+  int RequestData(vtkInformation *, vtkInformationVector **, vtkInformationVector *);
 private:
-  vtkPLYReader(const vtkPLYReader&) = delete;
-  void operator=(const vtkPLYReader&) = delete;
+  vtkPLYReader(const vtkPLYReader&) VTK_DELETE_FUNCTION;
+  void operator=(const vtkPLYReader&) VTK_DELETE_FUNCTION;
 };
 
 #endif
