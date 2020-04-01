@@ -322,20 +322,6 @@ int vtkOpenGLRenderer::UpdateGeometry()
     this->DeviceRenderOpaqueGeometry();
     timer->MarkEndEvent();
 
-    // do the render library specific stuff about translucent polygonal geometry.
-    // As it can be expensive, do a quick check if we can skip this step
-    for ( i = 0; !hasTranslucentPolygonalGeometry && i < this->PropArrayCount;
-          i++ )
-    {
-      hasTranslucentPolygonalGeometry=
-        this->PropArray[i]->HasTranslucentPolygonalGeometry();
-    }
-    if(hasTranslucentPolygonalGeometry)
-    {
-      timer->MarkStartEvent("Translucent Geometry");
-      this->DeviceRenderTranslucentPolygonalGeometry();
-      timer->MarkEndEvent();
-    }
   }
 
   // Apply FXAA before volumes and overlays. Volumes don't need AA, and overlays
@@ -369,6 +355,21 @@ int vtkOpenGLRenderer::UpdateGeometry()
         this->PropArray[i]->RenderVolumetricGeometry(this);
     }
     timer->MarkEndEvent();
+  }
+
+  // do the render library specific stuff about translucent polygonal geometry.
+  // As it can be expensive, do a quick check if we can skip this step
+  for (i = 0; !hasTranslucentPolygonalGeometry && i < this->PropArrayCount;
+      i++)
+  {
+      hasTranslucentPolygonalGeometry =
+          this->PropArray[i]->HasTranslucentPolygonalGeometry();
+  }
+  if (hasTranslucentPolygonalGeometry)
+  {
+      timer->MarkStartEvent("Translucent Geometry");
+      this->DeviceRenderTranslucentPolygonalGeometry();
+      timer->MarkEndEvent();
   }
 
   // loop through props and give them a chance to
