@@ -41,7 +41,7 @@ vtkPLYReader::vtkPLYReader()
 
 vtkPLYReader::~vtkPLYReader()
 {
-  delete [] this->FileName;
+  //delete [] this->FileName;
 }
 
 typedef struct _plyVertex {
