@@ -280,6 +280,7 @@ void finalizeRayCast()
   g_fragColor.r = g_fragColor.r * in_scale + in_bias * g_fragColor.a;
   g_fragColor.g = g_fragColor.g * in_scale + in_bias * g_fragColor.a;
   g_fragColor.b = g_fragColor.b * in_scale + in_bias * g_fragColor.a;
+  if (g_fragColor.r == 0.0 && g_fragColor.g == 0.0 && g_fragColor.b == 0.0) discard;
   gl_FragData[0] = g_fragColor;
 
   //VTK::RenderToImage::Exit

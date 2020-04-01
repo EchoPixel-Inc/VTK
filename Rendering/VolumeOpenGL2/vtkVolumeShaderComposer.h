@@ -225,6 +225,7 @@ namespace vtkvolume
       "uniform bool in_useJittering;\n"
       "vec3 g_rayJitter = vec3(0.0);\n"
       "\n"
+      "bool g_foundDepth;\n"
       "uniform vec2 in_averageIPRange;\n";
 
     const bool hasGradientOpacity = HasGradientOpacity(inputs);
@@ -381,6 +382,7 @@ namespace vtkvolume
         \n  }\
         \n  g_rayOrigin += g_rayJitter;\
         \n\
+        \n    g_foundDepth = false; \
         \n  // Flag to deternmine if voxel should be considered for the rendering\
         \n  g_skip = false;");
 
@@ -1814,7 +1816,15 @@ namespace vtkvolume
            \n        // value from the previous steps is then accumulated\
            \n        // to the composited colour alpha.\
            \n        g_srcColor.rgb *= g_srcColor.a;\
-           \n        g_fragColor = (1.0f - g_fragColor.a) * g_srcColor + g_fragColor;"
+           \n        g_fragColor = (1.0f - g_fragColor.a) * g_srcColor + g_fragColor;\
+           \n        if (!g_foundDepth && (g_fragColor.r != 0.0 || g_fragColor.g != 0.0 || g_fragColor.b != 0.0)) {\
+            \n           g_foundDepth = true; \
+            \n           vec4 dpt = in_projectionMatrix * in_modelViewMatrix * in_volumeMatrix[0] *\
+            \n                      in_textureDatasetMatrix[0] * vec4(g_dataPos, 1.0); \
+            \n           dpt.z = dpt.z / dpt.w; \
+            \n           float depth = 0.5 * (gl_DepthRange.far - gl_DepthRange.near) * dpt.z + 0.5 * (gl_DepthRange.far + gl_DepthRange.near); \
+            \n           gl_FragDepth = depth; \
+            \n         }"         
          );
 
          if (!mask || !maskInput ||

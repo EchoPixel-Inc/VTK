@@ -60,7 +60,7 @@ class vtkVolumeStateRAII
       ostate->vtkglEnable(GL_CULL_FACE);
 
       // Disable depth mask writing
-      ostate->vtkglDepthMask(GL_FALSE);
+      //ostate->vtkglDepthMask(GL_FALSE);
     }
 
     ~vtkVolumeStateRAII()
