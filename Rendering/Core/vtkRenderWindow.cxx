@@ -27,6 +27,7 @@
 #include "vtkTransform.h"
 #include "vtkGraphicsFactory.h"
 #include "vtkObjectFactory.h"
+#include "vtkMutexLock.h"
 
 #include <cmath>
 
@@ -72,6 +73,12 @@ vtkRenderWindow::vtkRenderWindow()
   this->AnaglyphColorMask[0] = 4;  // red
   this->AnaglyphColorMask[1] = 3;  // cyan
 
+  this->FirstStereoBuffer = NULL;
+  this->SecondStereoBuffer = NULL;
+  this->CopyBuffers = false;
+  this->Mutex = vtkMutexLock::New();
+
+
   this->AbortCheckTime = 0.0;
   this->CapturingGL2PSSpecialProps = 0;
   this->MultiSamples = 0;
@@ -112,6 +119,9 @@ vtkRenderWindow::~vtkRenderWindow()
 
     this->Renderers->Delete();
   }
+
+  Mutex->Delete();
+
 }
 
 //----------------------------------------------------------------------------
@@ -355,10 +365,129 @@ void vtkRenderWindow::DoStereoRender()
       }
       this->Renderers->Render();
     }
+
+
+    if (CopyBuffers)
+    {
+        //here I need there to be a firstbuffer in memory but no second buffer.  Any other condition
+        //and I want to clear everything.
+        this->Mutex->Lock();
+
+        if (FirstStereoBuffer != NULL && SecondStereoBuffer == NULL)
+        {
+            // this is the expected state - Copy second buffer
+            SecondBufferSize = this->GetSize();
+            SecondStereoBuffer = this->GetPixelData(0, 0, SecondBufferSize[0] - 1, SecondBufferSize[1] - 1, !this->DoubleBuffer, 0);
+        }
+        else
+        {
+            //Clear all memory - log an error
+            vtkErrorMacro("Unexpected - buffers out of sync!!");
+            if (SecondStereoBuffer)
+            {
+                // free memory
+                delete[] SecondStereoBuffer;
+                SecondStereoBuffer = NULL;
+            }
+
+            if (FirstStereoBuffer)
+            {
+                // free memory
+                delete[] FirstStereoBuffer;
+                FirstStereoBuffer = NULL;
+            }
+
+        }
+
+        this->Mutex->Unlock();
+    }
+
+
     this->StereoRenderComplete();
   }
 
 }
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+bool vtkRenderWindow::GetStereoBuffers(unsigned char *&firstBuffer, int *&firstbuffsize, unsigned char *&secondBuffer, int *&secondbuffsize)
+{
+    this->Mutex->Lock();
+
+    if (FirstStereoBuffer == NULL || SecondStereoBuffer == NULL)
+    {
+        //need both buffers ready to continue
+        firstBuffer = NULL;
+        secondBuffer = NULL;
+    }
+    else
+    {
+        //copy first buffer
+        firstbuffsize = FirstBufferSize;
+        unsigned int bufferSize1 = 3 * firstbuffsize[0] * firstbuffsize[1];
+        firstBuffer = new unsigned char[bufferSize1];
+        memcpy(firstBuffer, FirstStereoBuffer, bufferSize1 * sizeof(unsigned char));
+
+        //copy second buffer
+        secondbuffsize = SecondBufferSize;
+        unsigned int bufferSize2 = 3 * secondbuffsize[0] * secondbuffsize[1];
+        secondBuffer = new unsigned char[bufferSize2];
+        memcpy(secondBuffer, SecondStereoBuffer, bufferSize2 * sizeof(unsigned char));
+
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
+}
+//----------------------------------------------------------------------------
+
+//----------------------------------------------------------------------------
+bool vtkRenderWindow::GetFirstStereoBuffer(unsigned char *&buffer, int *&size)
+{
+    this->Mutex->Lock();
+
+    if (FirstStereoBuffer == NULL)
+    {
+        buffer = NULL;
+    }
+    else
+    {
+        size = FirstBufferSize;
+        unsigned int bufferSize = 3 * size[0] * size[1];
+        buffer = new unsigned char[bufferSize];
+        memcpy(buffer, FirstStereoBuffer, bufferSize * sizeof(unsigned char));
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
+}
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+//unsigned char* vtkRenderWindow::GetSecondStereoBuffer()
+bool vtkRenderWindow::GetSecondStereoBuffer(unsigned char *&buffer, int *&size)
+{
+    this->Mutex->Lock();
+
+    if (SecondStereoBuffer == NULL)
+    {
+        buffer = NULL;
+    }
+    else
+    {
+        size = SecondBufferSize;
+        unsigned int bufferSize = 3 * size[0] * size[1];
+        buffer = new unsigned char[bufferSize];
+        memcpy(buffer, SecondStereoBuffer, bufferSize * sizeof(unsigned char));
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
+}
+//----------------------------------------------------------------------------
+
 
 //----------------------------------------------------------------------------
 // Add a renderer to the list of renderers.
@@ -489,13 +618,40 @@ void vtkRenderWindow::StereoMidpoint(void)
       (this->StereoType == VTK_STEREO_DRESDEN) ||
       (this->StereoType == VTK_STEREO_ANAGLYPH) ||
       (this->StereoType == VTK_STEREO_CHECKERBOARD) ||
-      (this->StereoType == VTK_STEREO_SPLITVIEWPORT_HORIZONTAL))
+      (this->StereoType == VTK_STEREO_SPLITVIEWPORT_HORIZONTAL) ||
+      (this->StereoType == VTK_STEREO_TOP_BOTTOM) ||
+      this->CopyBuffers)
   {
     int *size;
     // get the size
     size = this->GetSize();
     // get the data
     this->StereoBuffer = this->GetPixelData(0,0,size[0]-1,size[1]-1,!this->DoubleBuffer);
+
+    if (CopyBuffers)
+    {
+        this->Mutex->Lock();
+        if (FirstStereoBuffer)
+        {
+            // free memory
+            delete[] FirstStereoBuffer;
+            FirstStereoBuffer = NULL;
+        }
+
+        //If we are setting a new First Stereo Buffer, then we need to clear the secondStereoBuffer too
+        //so they don't get out of sync
+        if (SecondStereoBuffer)
+        {
+            // free memory
+            delete[] SecondStereoBuffer;
+            SecondStereoBuffer = NULL;
+        }
+
+        FirstBufferSize = this->GetSize();
+        this->FirstStereoBuffer = this->GetPixelData(0, 0, FirstBufferSize[0] - 1, FirstBufferSize[1] - 1, !this->DoubleBuffer);
+        this->Mutex->Unlock();
+    }
+
   }
 }
 
@@ -816,6 +972,66 @@ void vtkRenderWindow::StereoRenderComplete(void)
       delete [] sright;
     }
     break;
+    case VTK_STEREO_TOP_BOTTOM:
+    {
+        unsigned char *top, *topTemp, *bottom;
+        unsigned char *s_top, *s_bottom;
+        int *size;
+
+        // get the size
+        size = this->GetSize();
+
+        // get the data
+        s_top = this->StereoBuffer;
+        s_bottom = this->GetPixelData(0, 0, size[0] - 1, size[1] - 1,
+            !this->DoubleBuffer);
+
+        int midY = static_cast<int>(size[1] / 2.0);
+
+        // If the column size is even, reduce the column copy by
+        // one. Otherwise the pointer will overflow when we fill the
+        // bottomv part of the stereo.
+        if (size[1] % 2 == 0)
+        {
+            midY--;
+        }
+
+        int offsetY = static_cast<int>(ceil(size[1] / 2.0));
+
+        // copy pixel data
+        for (int x = 0; x <= (size[0] - 1); ++x)
+        {
+            for (int y = 1; y <= midY; ++y)
+            {
+                top = s_top + (x * 3) + (y * size[0] * 3);
+                topTemp = s_top + (x * 3) + (2 * y * size[0] * 3);
+                *top++ = *topTemp++;
+                *top++ = *topTemp++;
+                *top++ = *topTemp++;
+            }
+        }
+
+        for (int x = 0; x <= (size[0] - 1); ++x)
+        {
+            for (int y = 0; y < midY; ++y)
+            {
+                top = s_top + (x * 3) + ((y + offsetY) * size[0] * 3);
+                bottom = s_bottom + (x * 3) + (2 * y * size[0] * 3);
+                *top++ = *bottom++;
+                *top++ = *bottom++;
+                *top++ = *bottom++;
+            }
+        }
+
+        // cleanup
+        this->ResultFrame = s_top;
+
+        this->StereoBuffer = NULL;
+        delete[] s_bottom;
+    }
+    break;
+
+
     case VTK_STEREO_SPLITVIEWPORT_HORIZONTAL:
     {
       unsigned char *left, *leftTemp, *right;
@@ -874,6 +1090,12 @@ void vtkRenderWindow::StereoRenderComplete(void)
       delete [] sright;
     }
     break;
+  }
+
+  if (StereoBuffer && CopyBuffers)
+  {
+      delete[] StereoBuffer;
+      StereoBuffer = NULL;
   }
 }
 
@@ -991,6 +1213,8 @@ const char *vtkRenderWindow::GetStereoTypeAsString()
       return "Checkerboard";
     case VTK_STEREO_SPLITVIEWPORT_HORIZONTAL:
       return "SplitViewportHorizontal";
+    case VTK_STEREO_TOP_BOTTOM:
+        return "TopBottom";
     case VTK_STEREO_FAKE:
       return "Fake";
     default:
