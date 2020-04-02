@@ -55,6 +55,7 @@ class vtkRenderer;
 class vtkRendererCollection;
 class vtkStereoCompositor;
 class vtkUnsignedCharArray;
+class vtkMutexLock;
 
 // lets define the different types of stereo
 #define VTK_STEREO_CRYSTAL_EYES 1
@@ -354,6 +355,21 @@ public:
    * stereo rendering.
    */
   virtual void StereoRenderComplete();
+
+  // Description:
+  // Added by EPX to have access to the stereo buffers
+  // Returns a pointer to the first or second stereo buffer
+  bool GetFirstStereoBuffer(unsigned char *&buffer, int *&size);
+  bool GetSecondStereoBuffer(unsigned char *&buffer, int *&size);
+  bool GetStereoBuffers(unsigned char *&firstBuffer, int *&firstbuffsize,
+      unsigned char *&secondBuffer, int *&secondbuffsize);
+
+  // Description:
+  // Set / Get if right/left stereo buffers should be saved
+  // Needed if displaying on a second display in a different stereo format
+  vtkSetMacro(CopyBuffers, bool);
+  vtkGetMacro(CopyBuffers, bool);
+
 
   //@{
   /**
@@ -753,6 +769,8 @@ protected:
   vtkTypeBool AlphaBitPlanes;
   vtkRenderWindowInteractor* Interactor;
   vtkSmartPointer<vtkUnsignedCharArray> StereoBuffer; // used for red blue stereo
+  unsigned char* FirstStereoBuffer;
+  unsigned char* SecondStereoBuffer;
   vtkSmartPointer<vtkUnsignedCharArray> ResultFrame;
   vtkTypeBool SwapBuffers;
   double DesiredUpdateRate;
@@ -770,11 +788,15 @@ protected:
   int DeviceIndex;
 
   bool UseSRGBColorSpace;
+  bool CopyBuffers;//added by EPX
+  int* FirstBufferSize;//added by EPX
+  int* SecondBufferSize;//added by EPX
 
   /**
    * The universal time since the last abort check occurred.
    */
   double AbortCheckTime;
+  vtkMutexLock* Mutex;
 
   vtkRenderWindow* SharedRenderWindow;
 

@@ -29,6 +29,7 @@
 #include "vtkTimerLog.h"
 #include "vtkTransform.h"
 #include "vtkUnsignedCharArray.h"
+#include "vtkMutexLock.h"
 
 #include <cmath>
 #include <utility> // for std::swap
@@ -71,6 +72,12 @@ vtkRenderWindow::vtkRenderWindow()
   this->AnaglyphColorMask[0] = 4; // red
   this->AnaglyphColorMask[1] = 3; // cyan
 
+  this->FirstStereoBuffer = nullptr;
+  this->SecondStereoBuffer = nullptr;
+  this->CopyBuffers = false;
+  this->Mutex = vtkMutexLock::New();
+
+
   this->AbortCheckTime = 0.0;
   this->CapturingGL2PSSpecialProps = 0;
   this->MultiSamples = 0;
@@ -102,6 +109,9 @@ vtkRenderWindow::~vtkRenderWindow()
 
     this->Renderers->Delete();
   }
+
+  Mutex->Delete();
+
 }
 
 void vtkRenderWindow::SetMultiSamples(int val)
@@ -361,8 +371,120 @@ void vtkRenderWindow::DoStereoRender()
       }
       this->Renderers->Render();
     }
+
+    if (this->CopyBuffers)
+    {
+        // This is where I need there to be a firstbuffer in memory but no second
+        // buffer.  Any other condition and I want to clear everything
+        this->Mutex->Lock();
+
+        if (this->FirstStereoBuffer != nullptr && this->SecondStereoBuffer == nullptr)
+        {
+            // this is the expected state - Copy second buffer
+            this->SecondBufferSize = this->GetSize();
+            this->SecondStereoBuffer = this->GetPixelData(0, 0, this->SecondBufferSize[0] - 1,
+                this->SecondBufferSize[1] - 1, !this->DoubleBuffer, 0);
+        }
+        else
+        {
+            //Clear all memory - log an error
+            vtkErrorMacro("Unexpected - buffers out of sync!!");
+            if (this->SecondStereoBuffer)
+            {
+                // free memory
+                delete[] this->SecondStereoBuffer;
+                this->SecondStereoBuffer = nullptr;
+            }
+
+            if (this->FirstStereoBuffer)
+            {
+                // free memory
+                delete[] this->FirstStereoBuffer;
+                this->FirstStereoBuffer = nullptr;
+            }
+        }
+
+        this->Mutex->Unlock();
+    }
+
     this->StereoRenderComplete();
   }
+}
+
+//----------------------------------------------------------------------------
+bool vtkRenderWindow::GetStereoBuffers(unsigned char*& firstBuffer, int*& firstbuffsize,
+    unsigned char *&secondBuffer, int *&secondbuffsize)
+{
+    this->Mutex->Lock();
+
+    if (this->FirstStereoBuffer == nullptr || this->SecondStereoBuffer == nullptr)
+    {
+        //need both buffers ready to continue
+        firstBuffer = nullptr;
+        secondBuffer = nullptr;
+    }
+    else
+    {
+        // copy first buffer
+        firstbuffsize = this->FirstBufferSize;
+        unsigned int bufferSize1 = 3 * firstbuffsize[0] * firstbuffsize[1];
+        firstBuffer = new unsigned char[bufferSize1];
+        memcpy(firstBuffer, this->FirstStereoBuffer, bufferSize1 * sizeof(unsigned char));
+
+        // copy second buffer
+        secondbuffsize = this->SecondBufferSize;
+        unsigned int bufferSize2 = 3 * secondbuffsize[0] * secondbuffsize[1];
+        secondBuffer = new unsigned char[bufferSize2];
+        memcpy(secondBuffer, this->SecondStereoBuffer, bufferSize2 * sizeof(unsigned char));
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
+}
+
+//----------------------------------------------------------------------------
+bool vtkRenderWindow::GetFirstStereoBuffer(unsigned char*& buffer, int*& size)
+{
+    this->Mutex->Lock();
+
+    if (this->FirstStereoBuffer == nullptr)
+    {
+        buffer = nullptr;
+    }
+    else
+    {
+        size = this->FirstBufferSize;
+        unsigned int bufferSize = 3 * size[0] * size[1];
+        buffer = new unsigned char[bufferSize];
+        memcpy(buffer, this->FirstStereoBuffer, bufferSize * sizeof(unsigned char));
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
+}
+
+//----------------------------------------------------------------------------
+bool vtkRenderWindow::GetSecondStereoBuffer(unsigned char *&buffer, int *&size)
+{
+    this->Mutex->Lock();
+
+    if (this->SecondStereoBuffer == nullptr)
+    {
+        buffer = nullptr;
+    }
+    else
+    {
+        size = this->SecondBufferSize;
+        unsigned int bufferSize = 3 * size[0] * size[1];
+        buffer = new unsigned char[bufferSize];
+        memcpy(buffer, this->SecondStereoBuffer, bufferSize * sizeof(unsigned char));
+    }
+
+    this->Mutex->Unlock();
+
+    return true;
 }
 
 //----------------------------------------------------------------------------
@@ -475,17 +597,46 @@ void vtkRenderWindow::StereoMidpoint()
   {
     aren->StereoMidpoint();
   }
-  if ((this->StereoType == VTK_STEREO_RED_BLUE) || (this->StereoType == VTK_STEREO_INTERLACED) ||
-    (this->StereoType == VTK_STEREO_DRESDEN) || (this->StereoType == VTK_STEREO_ANAGLYPH) ||
-    (this->StereoType == VTK_STEREO_CHECKERBOARD) ||
-    (this->StereoType == VTK_STEREO_SPLITVIEWPORT_HORIZONTAL))
+  if ((this->StereoType == VTK_STEREO_RED_BLUE) ||
+      (this->StereoType == VTK_STEREO_INTERLACED) ||
+      (this->StereoType == VTK_STEREO_DRESDEN) ||
+      (this->StereoType == VTK_STEREO_ANAGLYPH) ||
+      (this->StereoType == VTK_STEREO_CHECKERBOARD) ||
+      (this->StereoType == VTK_STEREO_SPLITVIEWPORT_HORIZONTAL) ||
+      this->CopyBuffers)
   {
     int* size;
     // get the size
     size = this->GetSize();
     // get the data
     this->GetPixelData(0, 0, size[0] - 1, size[1] - 1, !this->DoubleBuffer, this->StereoBuffer);
-  }
+
+    if (this->CopyBuffers)
+        {
+            this->Mutex->Lock();
+            if (this->FirstStereoBuffer)
+            {
+                // free memory
+                delete[] this->FirstStereoBuffer;
+                this->FirstStereoBuffer = nullptr;
+            }
+
+            // If we are setting a new first stereo buffer, then we need to clear
+            // the second stereo buffer so they don't get out of sync
+            if (this->SecondStereoBuffer)
+            {
+                // free memory
+                delete[] this->SecondStereoBuffer;
+                this->SecondStereoBuffer = nullptr;
+            }
+
+            this->FirstBufferSize = this->GetSize();
+            this->FirstStereoBuffer = this->GetPixelData(0, 0, this->FirstBufferSize[0] - 1,
+                this->FirstBufferSize[1] - 1, !this->DoubleBuffer);
+
+            this->Mutex->Unlock();
+        }
+      }
 }
 
 //----------------------------------------------------------------------------
