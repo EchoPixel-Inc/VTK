@@ -75,6 +75,8 @@ vtkRenderWindow::vtkRenderWindow()
 
   this->FirstStereoBuffer = NULL;
   this->SecondStereoBuffer = NULL;
+  this->FirstBufferSize = NULL;
+  this->SecondBufferSize = NULL;
   this->CopyBuffers = false;
   this->Mutex = vtkMutexLock::New();
 
@@ -423,12 +425,18 @@ bool vtkRenderWindow::GetStereoBuffers(unsigned char *&firstBuffer, int *&firstb
     else
     {
         //copy first buffer
+        if (FirstBufferSize == NULL)
+            FirstBufferSize = this->GetSize();
+
         firstbuffsize = FirstBufferSize;
         unsigned int bufferSize1 = 3 * firstbuffsize[0] * firstbuffsize[1];
         firstBuffer = new unsigned char[bufferSize1];
         memcpy(firstBuffer, FirstStereoBuffer, bufferSize1 * sizeof(unsigned char));
 
         //copy second buffer
+        if (SecondBufferSize == NULL)
+            SecondBufferSize = this->GetSize();
+
         secondbuffsize = SecondBufferSize;
         unsigned int bufferSize2 = 3 * secondbuffsize[0] * secondbuffsize[1];
         secondBuffer = new unsigned char[bufferSize2];
