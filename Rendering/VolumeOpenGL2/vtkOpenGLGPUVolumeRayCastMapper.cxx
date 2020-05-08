@@ -907,6 +907,11 @@ bool vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::IsCameraInside(
   vtkCamera* cam = ren->GetActiveCamera();
 
   double planes[24];
+/*
+Previously there were some EPX changes here to get the view matrix, but this should be 
+taken care of by the GetFrustumPlanes() method, that utilizes the EPX matrices set to 
+the custom class epxCameraOpenGL2
+*/
   cam->GetFrustumPlanes(ren->GetTiledAspectRatio(), planes);
 
   // convert geometry to world then compare to frustum planes
@@ -1026,6 +1031,11 @@ void vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::RenderVolumeGeometry(
 
       vtkCamera* cam = ren->GetActiveCamera();
 
+    /*
+      Previously there were some EPX changes here to get the view matrix, but this should be
+      taken care of by the GetFrustumPlanes() method, that utilizes the EPX matrices set to
+      the custom class epxCameraOpenGL2
+      */
       double fplanes[24];
       cam->GetFrustumPlanes(ren->GetTiledAspectRatio(), fplanes);
 
@@ -3338,7 +3348,20 @@ void vtkOpenGLGPUVolumeRayCastMapper::vtkInternal::SetCameraShaderParameters(
     prog->SetUniform3fv("in_projectionDirection", 1, &fvalue3);
   }
 
-  vtkInternal::ToFloat(cam->GetPosition(), fvalue3, 3);
+  // vtkInternal::ToFloat(cam->GetPosition(), fvalue3, 3);
+  //================================ EPX CHANGES
+  vtkSmartPointer<vtkMatrix4x4> epxViewTP = vtkSmartPointer<vtkMatrix4x4>::New();
+  vtkMatrix4x4* viewTransformMtx = ren->GetActiveCamera()->GetViewTransformMatrix();
+  epxViewTP->DeepCopy(viewTransformMtx);
+  epxViewTP->Invert();
+
+  double pos[4];
+  pos[0] = epxViewTP->GetElement(0, 3);
+  pos[1] = epxViewTP->GetElement(1, 3);
+  pos[2] = epxViewTP->GetElement(2, 3);
+  pos[3] = 1.0;
+  vtkInternal::ToFloat(pos, fvalue3, 3);
+  //================================ EPX CHANGES END
   prog->SetUniform3fv("in_cameraPos", 1, &fvalue3);
 
   // TODO Take consideration of reduction factor
