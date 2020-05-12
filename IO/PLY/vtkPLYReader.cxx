@@ -42,6 +42,10 @@
 
 vtkStandardNewMacro(vtkPLYReader);
 
+/* /// EPX CHANGES - our model library has zeroes in the alpha channel even though it shouldn't! So we force the alpha channel to be 255 if it exists */
+#define EPX_DISABLE_RGBA 1
+
+
 namespace
 {
 /**
@@ -279,6 +283,7 @@ int vtkPLYReader::RequestData(vtkInformation* vtkNotUsed(request),
     if (rgbPointsAvailable)
     {
       rgbPoints = vtkSmartPointer<vtkUnsignedCharArray>::New();
+
       if (vtkPLY::find_property(elem, "alpha", &index) != nullptr)
       {
         rgbPoints->SetName("RGBA");
@@ -412,7 +417,11 @@ int vtkPLYReader::RequestData(vtkInformation* vtkNotUsed(request),
         {
           if (rgbPointsHaveAlpha)
           {
+#if EPX_DISABLE_RGBA 
+            rgbPoints->SetTuple4(j, vertex.red, vertex.green, vertex.blue, 255);
+#else
             rgbPoints->SetTuple4(j, vertex.red, vertex.green, vertex.blue, vertex.alpha);
+#endif
           }
           else
           {
@@ -503,7 +512,11 @@ int vtkPLYReader::RequestData(vtkInformation* vtkNotUsed(request),
             rgbCells->SetValue(4 * j, face.red);
             rgbCells->SetValue(4 * j + 1, face.green);
             rgbCells->SetValue(4 * j + 2, face.blue);
+#if EPX_DISABLE_RGBA
+            rgbCells->SetValue(4 * j + 3, 255);
+#else
             rgbCells->SetValue(4 * j + 3, face.alpha);
+#endif
           }
           else
           {
