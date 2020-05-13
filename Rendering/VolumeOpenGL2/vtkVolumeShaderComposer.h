@@ -234,6 +234,7 @@ std::string BaseDeclarationFragment(vtkRenderer* vtkNotUsed(ren), vtkVolumeMappe
                  "uniform bool in_useJittering;\n"
                  "vec3 g_rayJitter = vec3(0.0);\n"
                  "\n"
+                 "bool g_foundDepth;\n" ////// EPX CHANGE - added this line! ///////////
                  "uniform vec2 in_averageIPRange;\n";
 
   const bool hasGradientOpacity = HasGradientOpacity(inputs);
@@ -408,7 +409,11 @@ std::string BaseInit(vtkRenderer* vtkNotUsed(ren), vtkVolumeMapper* mapper,
         \n");
   }
 
+  ////// EPX CHANGE - added the 
+  ////// g_foundDepth = false; 
+  ////// line below! ///////////
   shaderStr += std::string("\
+      \n  g_foundDepth = false;\
       \n  // Flag to determine if voxel should be considered for the rendering\
       \n  g_skip = false;");
 
@@ -1829,6 +1834,9 @@ std::string ShadingSingleInput(vtkRenderer* vtkNotUsed(ren), vtkVolumeMapper* ma
              \n        g_srcColor = computeColor(scalar, g_srcColor.a);");
       }
 
+      /////////////// EPX Changes /////////////////
+      ///////////// Replace the following block 
+      /*
       shaderStr += std::string("\
            \n        // Opacity calculation using compositing:\
            \n        // Here we use front to back compositing scheme whereby\
@@ -1842,6 +1850,31 @@ std::string ShadingSingleInput(vtkRenderer* vtkNotUsed(ren), vtkVolumeMapper* ma
            \n        // to the composited colour alpha.\
            \n        g_srcColor.rgb *= g_srcColor.a;\
            \n        g_fragColor = (1.0f - g_fragColor.a) * g_srcColor + g_fragColor;");
+      */
+      shaderStr += std::string("\
+           \n        // Opacity calculation using compositing:\
+           \n        // Here we use front to back compositing scheme whereby\
+           \n        // the current sample value is multiplied to the\
+           \n        // currently accumulated alpha and then this product\
+           \n        // is subtracted from the sample value to get the\
+           \n        // alpha from the previous steps. Next, this alpha is\
+           \n        // multiplied with the current sample colour\
+           \n        // and accumulated to the composited colour. The alpha\
+           \n        // value from the previous steps is then accumulated\
+           \n        // to the composited colour alpha.\
+           \n        g_srcColor.rgb *= g_srcColor.a;\
+           \n        g_fragColor = (1.0f - g_fragColor.a) * g_srcColor + g_fragColor;\
+           \n        if (!g_foundDepth && (g_fragColor.r != 0.0 || g_fragColor.g != 0.0 || g_fragColor.b != 0.0)) {\
+            \n           g_foundDepth = true; \
+            \n           vec4 dpt = in_projectionMatrix * in_modelViewMatrix * in_volumeMatrix[0] *\
+            \n                      in_textureDatasetMatrix[0] * vec4(g_dataPos, 1.0); \
+            \n           dpt.z = dpt.z / dpt.w; \
+            \n           float depth = 0.5 * (gl_DepthRange.far - gl_DepthRange.near) * dpt.z + 0.5 * (gl_DepthRange.far + gl_DepthRange.near); \
+            \n           gl_FragDepth = depth; \
+            \n         }");
+
+      /////////////// END EPX Changes /////////////////
+
 
       if (!mask || !maskInput || maskType != vtkGPUVolumeRayCastMapper::LabelMapMaskType)
       {

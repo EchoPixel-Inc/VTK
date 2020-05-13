@@ -353,6 +353,9 @@ int vtkOpenGLRenderer::UpdateGeometry(vtkFrameBufferObjectBase* fbo)
     this->DeviceRenderOpaqueGeometry(fbo);
     timer->MarkEndEvent();
 
+    /////////////////// EPX Changes ////////////////////
+    ///// Take the following block and move it further down /////////
+    /*
     // do the render library specific stuff about translucent polygonal geometry.
     // As it can be expensive, do a quick check if we can skip this step
     for (i = 0; !hasTranslucentPolygonalGeometry && i < this->PropArrayCount; i++)
@@ -365,9 +368,11 @@ int vtkOpenGLRenderer::UpdateGeometry(vtkFrameBufferObjectBase* fbo)
       this->DeviceRenderTranslucentPolygonalGeometry(fbo);
       timer->MarkEndEvent();
     }
+*/
   }
+    /////////////////// END EPX Changes  ////////////////////
 
-  // Apply FXAA before volumes and overlays. Volumes don't need AA, and overlays
+    // Apply FXAA before volumes and overlays. Volumes don't need AA, and overlays
   // are usually things like text, which are already antialiased.
   if (this->UseFXAA)
   {
@@ -397,6 +402,22 @@ int vtkOpenGLRenderer::UpdateGeometry(vtkFrameBufferObjectBase* fbo)
     }
     timer->MarkEndEvent();
   }
+
+    /////////////////// EPX Changes ////////////////////
+  // do the render library specific stuff about translucent polygonal geometry.
+  // As it can be expensive, do a quick check if we can skip this step
+  for (i = 0; !hasTranslucentPolygonalGeometry && i < this->PropArrayCount; i++)
+  {
+    hasTranslucentPolygonalGeometry = this->PropArray[i]->HasTranslucentPolygonalGeometry();
+  }
+  if (hasTranslucentPolygonalGeometry)
+  {
+    timer->MarkStartEvent("Translucent Geometry");
+    this->DeviceRenderTranslucentPolygonalGeometry(fbo);
+    timer->MarkEndEvent();
+  }
+  /////////////////// END EPX Changes  ////////////////////
+
 
   // loop through props and give them a chance to
   // render themselves as an overlay (or underlay)

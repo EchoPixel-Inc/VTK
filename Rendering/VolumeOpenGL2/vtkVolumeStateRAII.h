@@ -59,8 +59,11 @@ public:
 
     ostate->vtkglEnable(GL_CULL_FACE);
 
+    /////////////////// EPX Changes ////////////////////
+    /////////////////// Comment out the line below //////////
     // Disable depth mask writing
-    ostate->vtkglDepthMask(GL_FALSE);
+    //ostate->vtkglDepthMask(GL_FALSE);
+    /////////////////// END EPX Changes  ////////////////////
   }
 
   ~vtkVolumeStateRAII()
